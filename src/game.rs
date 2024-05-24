@@ -169,6 +169,8 @@ impl Game {
             self.bananas.clone_from(&new_state.bananas);
             self.logs.clone_from(&new_state.logs);
             self.actions_sold.clone_from(&new_state.actions_sold);
+        } else {
+            println!("Error on calling take_your_turn function: {:?}", result);
         }
     }
 
@@ -191,7 +193,7 @@ impl Game {
     fn buy_banana(&mut self, car_index: usize) {
         let cost = self.get_banana_cost();
         let car = &mut self.cars[car_index];
-        if car.balance >= cost {
+        if car.balance >= cost && !self.bananas.contains(&car.y) {
             car.balance -= cost;
 
             self.actions_sold[1] += 1;

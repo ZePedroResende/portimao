@@ -6,7 +6,10 @@ function takeYourTurn()
 	GameState:buy_acceleration(2)
 	GameState:buy_banana()
 
-	if index == 3 then
-		GameState:buy_shell(2)
+	local bananas = GameState.bananas
+	-- print all the bananas localtions
+	--print(ipairs(bananas))
+	for i, banana in ipairs(bananas) do
+		print(i, banana)
 	end
 end
