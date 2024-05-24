@@ -12,9 +12,10 @@ fn main() {
     let mut game = Game::new();
 
     let base_car = std::fs::read_to_string("scripts/base.lua").unwrap();
-    game.register(Car::new(base_car.clone()));
-    game.register(Car::new(base_car.clone()));
-    game.register(Car::new(base_car.clone()));
+
+    game.register(Car::new(base_car.clone(), "Alice".to_string()));
+    game.register(Car::new(base_car.clone(), "Bob".to_string()));
+    game.register(Car::new(base_car.clone(), "Charlie".to_string()));
 
     game.race();
 }

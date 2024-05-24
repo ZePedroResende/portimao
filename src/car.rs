@@ -11,15 +11,17 @@ pub struct Car {
     pub y: u32,
     #[serde(skip_serializing)]
     pub lua_script: String,
+    pub name: String,
 }
 
 impl Car {
-    pub const fn new(script: String) -> Self {
+    pub const fn new(script: String, name: String) -> Self {
         Self {
             balance: STARTING_BALANCE,
             speed: 0,
             y: 0,
             lua_script: script,
+            name,
         }
     }
 }

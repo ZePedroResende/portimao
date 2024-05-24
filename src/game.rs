@@ -1,7 +1,7 @@
 use std::io::Write;
 use std::sync::{Arc, Mutex};
 
-use mlua::{Function, Lua, UserData};
+use mlua::{Error as LuaError, Function, IntoLua, Lua, UserData, Value};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
@@ -44,6 +44,28 @@ pub enum Action {
     Shell(usize) = 2,
 }
 
+impl<'lua> IntoLua<'lua> for Action {
+    fn into_lua(self, lua: &'lua Lua) -> color_eyre::Result<Value<'lua>, LuaError> {
+        let table = lua.create_table()?;
+        match self {
+            Action::Acceleration(amount) => {
+                table.set("type", "acceleration")?;
+                table.set("amount", amount)?;
+            }
+            Action::Banana(index) => {
+                table.set("type", "banana")?;
+                table.set("index", index)?;
+            }
+            Action::Shell(index) => {
+                table.set("type", "shell")?;
+                table.set("index", index)?;
+            }
+        }
+
+        Ok(Value::Table(table))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum State {
     Waiting,
@@ -53,7 +75,6 @@ pub enum State {
 
 impl Game {
     pub(crate) fn new() -> Self {
-
         let mut rng = rand::thread_rng();
         Self {
             state: State::Waiting,
@@ -337,7 +358,7 @@ impl Game {
     }
 
     pub fn export_log(&self) {
-        let json = serde_json::json!({"logs" : self.logs, "winner" :self.winner});
+        let json = serde_json::json!({"logs" : self.logs, "winner" :{"id": self.winner, "name": self.cars[self.winner.unwrap()].name}});
 
         println!("{}", json);
 
@@ -371,6 +392,10 @@ impl UserData for GameState {
         fields.add_field_method_get("seed", |_, this| {
             let seed = this.0.lock().unwrap().seed;
             Ok(seed)
+        });
+        fields.add_field_method_get("logs", |_, this| {
+            let logs = this.0.lock().unwrap().logs.clone();
+            Ok(logs)
         });
     }
     fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
