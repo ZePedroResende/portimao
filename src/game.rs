@@ -1,3 +1,4 @@
+use std::io::Write;
 use std::sync::{Arc, Mutex};
 
 use mlua::{Function, Lua, UserData};
@@ -5,6 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::car::Car;
 use crate::log::Log;
+use std::fs::File;
 
 const PLAYERS_REQUIRED: usize = 3;
 const FINISH_DISTANCE: u32 = 1000;
@@ -75,10 +77,8 @@ impl Game {
             self.run_car();
             self.play_turn();
         }
-        println!(
-            "{}",
-            serde_json::json!({"logs" : self.logs, "winner" :self.winner})
-        );
+
+        self.export_log();
     }
 
     fn play_turn(&mut self) {
@@ -89,12 +89,16 @@ impl Game {
 
             // Move car
             let car_old_position = car.y;
-            let car_new_postion = car.y + car.speed;
+            let car_new_position = car.y + car.speed;
 
             car.y += car.speed;
 
             // Check for banana collisions
-            if let Some(pos) = self.bananas.iter().position(|&b| car_old_position < b && car_new_postion >= b) {
+            if let Some(pos) = self
+                .bananas
+                .iter()
+                .position(|&b| car_old_position < b && car_new_position >= b)
+            {
                 car.speed = 0;
                 car.y = self.bananas[pos];
                 self.bananas.remove(pos);
@@ -150,19 +154,22 @@ impl Game {
             .exec()
             .expect("Failed to load Lua script");
 
-        let take_your_turn: Function = globals
-            .get("takeYourTurn")
-            .expect("Failed to get takeYourTurn function");
+        let take_your_turn: Result<Function, mlua::prelude::LuaError> = globals.get("takeYourTurn");
 
-        let _: () = take_your_turn
-            .call(())
-            .expect("Failed to call takeYourTurn function");
+        if let Err(e) = take_your_turn {
+            println!("Erroron getting take_your_turn function: {:?}", e);
+            return;
+        }
 
-        let new_state = state.lock().unwrap();
-        self.cars.clone_from(&new_state.cars);
-        self.bananas.clone_from(&new_state.bananas);
-        self.logs.clone_from(&new_state.logs);
-        self.actions_sold.clone_from(&new_state.actions_sold);
+        let result: Result<(), mlua::prelude::LuaError> = take_your_turn.unwrap().call(());
+
+        if let Ok(()) = result {
+            let new_state = state.lock().unwrap();
+            self.cars.clone_from(&new_state.cars);
+            self.bananas.clone_from(&new_state.bananas);
+            self.logs.clone_from(&new_state.logs);
+            self.actions_sold.clone_from(&new_state.actions_sold);
+        }
     }
 
     fn buy_acceleration(&mut self, car_index: usize, amount: u32) {
@@ -285,7 +292,7 @@ impl Game {
                 SHELL_TARGET_PRICE as f64,
                 SHELL_PER_TURN_DECREASE,
                 self.turns as u64,
-                (actions_sold + i as u128),
+                actions_sold + i as u128,
                 SHELL_SELL_PER_TURN,
             ) as u128;
         }
@@ -311,14 +318,28 @@ impl Game {
         let price_multiplier = (ln * intermediate_value).exp();
 
         // Compute the action price
-        let a = target_price * price_multiplier;
 
-
-        a
+        target_price * price_multiplier
     }
 
     fn get_index(&self) -> usize {
         self.turns % self.cars.len()
+    }
+
+    pub fn export_log(&self) {
+        let json = serde_json::json!({"logs" : self.logs, "winner" :self.winner});
+
+        let time_now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        let filename = format!("logs/logs_{}.json", time_now);
+
+        File::create(filename)
+            .unwrap()
+            .write_all(json.to_string().as_bytes())
+            .unwrap();
     }
 }
 
@@ -362,6 +383,23 @@ impl UserData for GameState {
                 lock.buy_shell(index, amount);
             }
             Ok(())
+        });
+
+        methods.add_method("get_accelerate_cost", |_, user_data, amount: u32| {
+            let lock = user_data.0.lock().unwrap();
+            let cost = lock.get_accelerate_cost(amount);
+            Ok(cost)
+        });
+
+        methods.add_method("get_banana_cost", |_, user_data, (): ()| {
+            let lock = user_data.0.lock().unwrap();
+            let cost = lock.get_banana_cost();
+            Ok(cost)
+        });
+        methods.add_method("get_shell_cost", |_, user_data, amount: u32| {
+            let lock = user_data.0.lock().unwrap();
+            let cost = lock.get_shell_cost(amount);
+            Ok(cost)
         });
     }
 }
