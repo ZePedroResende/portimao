@@ -33,4 +33,4 @@ We have the following graphs where the x is the `turnsSinceStart`, z is the `sol
 ![](./assets/Graph1.png)
 ![](./assets/Graph2.png)
 
-when you buy multiple items in the same turn, the price is calculated as if you bought them one by one. So the actual price you pay is the sum of the prices of each item with new amount of items e.
+When you buy multiple items in the same turn, the price is calculated as if you bought them one by one. So the actual price you pay is the sum of the prices of each item with new amount of items e.

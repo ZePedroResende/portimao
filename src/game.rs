@@ -72,6 +72,9 @@ impl Game {
     }
 
     pub(crate) fn race(&mut self) {
+        if self.state != State::Active {
+            panic!("Not enough players to start the game");
+        }
         self.log_turn();
         while self.state == State::Active {
             self.run_car();
@@ -330,6 +333,8 @@ impl Game {
 
     pub fn export_log(&self) {
         let json = serde_json::json!({"logs" : self.logs, "winner" :self.winner});
+
+        println!("{}", json);
 
         let time_now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
