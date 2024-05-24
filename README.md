@@ -12,6 +12,7 @@ You have at your disposal a `GameState` object (its actually a (hash)table, ever
   - `y` - the y position of the car
 - `bananas` - List of the y position of all bananas in the game.
 - `index` - your car's index in the cars list
+- `seed` - A random seed that you can use to generate random numbers
 - `buy_acceleration(amount)` - function to buy acceleration.
 - `buy_banana()` - function to buy banana.
 - `buy_shell(amount)` - function to buy shell.

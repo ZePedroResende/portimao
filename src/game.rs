@@ -2,6 +2,7 @@ use std::io::Write;
 use std::sync::{Arc, Mutex};
 
 use mlua::{Function, Lua, UserData};
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 use crate::car::Car;
@@ -32,6 +33,7 @@ pub struct Game {
     logs: Vec<Log>,
     winner: Option<usize>,
     actions_sold: Vec<u128>,
+    seed: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -51,6 +53,8 @@ pub enum State {
 
 impl Game {
     pub(crate) fn new() -> Self {
+
+        let mut rng = rand::thread_rng();
         Self {
             state: State::Waiting,
             turns: 1,
@@ -59,6 +63,7 @@ impl Game {
             logs: Vec::new(),
             winner: None,
             actions_sold: vec![0; 3],
+            seed: rng.gen(),
         }
     }
 
@@ -362,6 +367,10 @@ impl UserData for GameState {
         fields.add_field_method_get("index", |_, this| {
             let index = this.0.lock().unwrap().get_index() + 1;
             Ok(index)
+        });
+        fields.add_field_method_get("seed", |_, this| {
+            let seed = this.0.lock().unwrap().seed;
+            Ok(seed)
         });
     }
     fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
