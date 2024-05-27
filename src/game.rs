@@ -203,7 +203,7 @@ impl Game {
         }
     }
 
-    fn buy_acceleration(&mut self, car_index: usize, amount: u32) {
+    fn buy_acceleration(&mut self, car_index: usize, amount: u32) -> bool {
         let cost = self.get_accelerate_cost(amount);
         let car = self.cars.get_mut(car_index).expect("Car failed");
         if car.balance >= cost {
@@ -216,10 +216,14 @@ impl Game {
                 .unwrap()
                 .actions
                 .push(Action::Acceleration(amount));
+
+            return true;
         }
+
+        false
     }
 
-    fn buy_banana(&mut self, car_index: usize) {
+    fn buy_banana(&mut self, car_index: usize) -> bool {
         let cost = self.get_banana_cost();
         let car = &mut self.cars[car_index];
         if car.balance >= cost && !self.bananas.contains(&car.y) {
@@ -234,17 +238,21 @@ impl Game {
                 .unwrap()
                 .actions
                 .push(Action::Banana(car_index));
+
+            return true;
         }
+
+        false
     }
 
-    fn buy_shell(&mut self, car_index: usize, amount: u32) {
+    fn buy_shell(&mut self, car_index: usize, amount: u32) -> bool {
         let cost = self.get_shell_cost(amount);
         let cars = self.cars.clone();
         {
             let car = &mut self.cars.get_mut(car_index).unwrap();
 
             if car.balance < cost {
-                return;
+                return false;
             }
 
             car.balance -= cost;
@@ -286,6 +294,8 @@ impl Game {
                 self.cars[*index].speed = 0;
             }
         }
+
+        true
     }
 
     fn get_accelerate_cost(&self, amount: u32) -> u128 {
@@ -400,30 +410,24 @@ impl UserData for GameState {
     }
     fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
         methods.add_method_mut("buy_acceleration", |_, user_data, amount: u32| {
-            {
-                let mut lock = user_data.0.lock().unwrap();
-                let index = lock.get_index();
-                lock.buy_acceleration(index, amount);
-            }
-            Ok(())
+            let mut lock = user_data.0.lock().unwrap();
+            let index = lock.get_index();
+            let success = lock.buy_acceleration(index, amount);
+            Ok(success)
         });
 
         methods.add_method_mut("buy_banana", |_, user_data, (): ()| {
-            {
-                let mut lock = user_data.0.lock().unwrap();
-                let index = lock.get_index();
-                lock.buy_banana(index);
-            }
-            Ok(())
+            let mut lock = user_data.0.lock().unwrap();
+            let index = lock.get_index();
+            let success = lock.buy_banana(index);
+            Ok(success)
         });
 
         methods.add_method_mut("buy_shell", |_, user_data, amount: u32| {
-            {
-                let mut lock = user_data.0.lock().unwrap();
-                let index = lock.get_index();
-                lock.buy_shell(index, amount);
-            }
-            Ok(())
+            let mut lock = user_data.0.lock().unwrap();
+            let index = lock.get_index();
+            let success = lock.buy_shell(index, amount);
+            Ok(success)
         });
 
         methods.add_method("get_accelerate_cost", |_, user_data, amount: u32| {
