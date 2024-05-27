@@ -74,7 +74,7 @@ pub enum State {
 }
 
 impl Game {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         let mut rng = rand::thread_rng();
         Self {
             state: State::Waiting,
@@ -88,7 +88,7 @@ impl Game {
         }
     }
 
-    pub(crate) fn register(&mut self, car: Car) {
+    pub fn register(&mut self, car: Car) {
         assert!(!(self.state != State::Waiting), "Game already started");
 
         self.cars.push(car);
@@ -97,7 +97,7 @@ impl Game {
         }
     }
 
-    pub(crate) fn race(&mut self) {
+    pub fn race(&mut self) {
         if self.state != State::Active {
             panic!("Not enough players to start the game");
         }
