@@ -3,7 +3,7 @@ function takeYourTurn()
 	local index = GameState.index
 	local car = cars[index]
 	local balance = car.balance
-	GameState:buy_acceleration(10)
+	GameState:buy_acceleration(1)
 	GameState:buy_banana()
 
 	if index == 3 then

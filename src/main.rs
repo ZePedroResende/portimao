@@ -3,6 +3,7 @@
 use crate::car::Car;
 use crate::game::Game;
 
+mod action;
 mod car;
 mod game;
 mod log;

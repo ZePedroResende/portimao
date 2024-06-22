@@ -5,6 +5,7 @@ use mlua::{Error as LuaError, Function, IntoLua, Lua, UserData, Value};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
+use crate::action::Action;
 use crate::car::Car;
 use crate::log::Log;
 use std::fs::File;
@@ -34,36 +35,6 @@ pub struct Game {
     winner: Option<usize>,
     actions_sold: Vec<u128>,
     seed: u64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[repr(usize)]
-pub enum Action {
-    Acceleration(u32) = 0,
-    Banana(usize) = 1,
-    Shell(usize) = 2,
-}
-
-impl<'lua> IntoLua<'lua> for Action {
-    fn into_lua(self, lua: &'lua Lua) -> color_eyre::Result<Value<'lua>, LuaError> {
-        let table = lua.create_table()?;
-        match self {
-            Action::Acceleration(amount) => {
-                table.set("type", "acceleration")?;
-                table.set("amount", amount)?;
-            }
-            Action::Banana(index) => {
-                table.set("type", "banana")?;
-                table.set("index", index)?;
-            }
-            Action::Shell(index) => {
-                table.set("type", "shell")?;
-                table.set("index", index)?;
-            }
-        }
-
-        Ok(Value::Table(table))
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -101,9 +72,10 @@ impl Game {
         if self.state != State::Active {
             panic!("Not enough players to start the game");
         }
+
         self.log_turn();
+
         while self.state == State::Active {
-            self.run_car();
             self.play_turn();
         }
 
@@ -111,11 +83,42 @@ impl Game {
     }
 
     fn play_turn(&mut self) {
-        assert!(!(self.state != State::Active), "Game not active");
+        assert!(self.state == State::Active, "Game not active");
 
-        for (index, car) in &mut self.cars.iter_mut().enumerate() {
-            // Update shields
+        // cars choose their actions
 
+        let states: Vec<Self> = (0..self.cars.len())
+            .map(|index| {
+                let mut game = self.clone();
+                game.run_car_script(index);
+                game
+            })
+            .collect();
+
+        // update the number of actions sold
+        states.iter().for_each(|state| {
+            for i in 0..state.actions_sold.len() {
+                self.actions_sold[i] += state.actions_sold[i];
+            }
+        });
+
+        // apply actions to state
+        states.iter().enumerate().for_each(|(index_car, state)| {
+            if state.actions_sold[Action::Banana(0).into_usize()] > 0 {
+                self.apply_banana(index_car);
+            }
+            if state.actions_sold[Action::Shell(0).into_usize()] > 0 {
+                let amount = state.actions_sold[Action::Shell(0).into_usize()];
+                self.apply_shell(amount as u32, index_car);
+            }
+            if state.actions_sold[Action::Acceleration(0).into_usize()] > 0 {
+                let amount = state.actions_sold[Action::Acceleration(0).into_usize()];
+                self.apply_acceleration(amount as u32, index_car);
+            }
+        });
+
+        // update y position and execute actions
+        for (index, car) in self.cars.iter_mut().enumerate() {
             // Move car
             let car_old_position = car.y;
             let car_new_position = car.y + car.speed;
@@ -140,6 +143,7 @@ impl Game {
                 break;
             }
         }
+
         self.log_turn();
 
         self.turns += 1;
@@ -166,10 +170,9 @@ impl Game {
         );
     }
 
-    fn run_car(&mut self) {
+    fn run_car_script(&mut self, index: usize) {
         self.logs.push(Log::default());
         let lua = Lua::new();
-        let index = self.turns % self.cars.len();
         let car: Car = self.cars[index].clone();
 
         let globals = lua.globals();
@@ -194,9 +197,9 @@ impl Game {
 
         if let Ok(()) = result {
             let new_state = state.lock().unwrap();
-            self.cars.clone_from(&new_state.cars);
-            self.bananas.clone_from(&new_state.bananas);
-            self.logs.clone_from(&new_state.logs);
+            //self.cars.clone_from(&new_state.cars);
+            //self.bananas.clone_from(&new_state.bananas);
+            //self.logs.clone_from(&new_state.logs);
             self.actions_sold.clone_from(&new_state.actions_sold);
         } else {
             println!("Error on calling take_your_turn function: {:?}", result);
@@ -208,19 +211,24 @@ impl Game {
         let car = self.cars.get_mut(car_index).expect("Car failed");
         if car.balance >= cost {
             car.balance -= cost;
-            car.speed += amount;
 
-            self.actions_sold[0] += amount as u128;
-            self.logs
-                .last_mut()
-                .unwrap()
-                .actions
-                .push(Action::Acceleration(amount));
+            self.actions_sold[Action::Acceleration(0).into_usize()] += amount as u128;
 
             return true;
         }
 
         false
+    }
+
+    fn apply_acceleration(&mut self, amount: u32, car_index: usize) {
+        let car = &mut self.cars[car_index];
+        car.speed += amount;
+
+        self.logs
+            .last_mut()
+            .unwrap()
+            .actions
+            .push(Action::Acceleration(amount));
     }
 
     fn buy_banana(&mut self, car_index: usize) -> bool {
@@ -229,15 +237,7 @@ impl Game {
         if car.balance >= cost && !self.bananas.contains(&car.y) {
             car.balance -= cost;
 
-            self.actions_sold[1] += 1;
-            self.bananas.push(car.y);
-            self.bananas.sort();
-
-            self.logs
-                .last_mut()
-                .unwrap()
-                .actions
-                .push(Action::Banana(car_index));
+            self.actions_sold[Action::Banana(0).into_usize()] += 1;
 
             return true;
         }
@@ -245,19 +245,34 @@ impl Game {
         false
     }
 
+    fn apply_banana(&mut self, car_index: usize) {
+        let car = &mut self.cars[car_index];
+        self.bananas.push(car.y);
+        self.bananas.sort();
+
+        self.logs
+            .last_mut()
+            .unwrap()
+            .actions
+            .push(Action::Banana(car_index));
+    }
+
     fn buy_shell(&mut self, car_index: usize, amount: u32) -> bool {
         let cost = self.get_shell_cost(amount);
-        let cars = self.cars.clone();
-        {
-            let car = &mut self.cars.get_mut(car_index).unwrap();
+        let car = &mut self.cars.get_mut(car_index).unwrap();
 
-            if car.balance < cost {
-                return false;
-            }
-
-            car.balance -= cost;
-            self.actions_sold[2] += amount as u128;
+        if car.balance < cost {
+            return false;
         }
+
+        car.balance -= cost;
+        self.actions_sold[Action::Shell(0).into_usize()] += amount as u128;
+
+        true
+    }
+
+    fn apply_shell(&mut self, amount: u32, car_index: usize) {
+        let cars = self.cars.clone();
 
         // lets enum the cars with their index and remove the current car
         let mut remaining_cars = cars.into_iter().enumerate().collect::<Vec<_>>();
@@ -294,12 +309,14 @@ impl Game {
                 self.cars[*index].speed = 0;
             }
         }
-
-        true
     }
 
     fn get_accelerate_cost(&self, amount: u32) -> u128 {
-        let actions_sold = self.actions_sold[0];
+        dbg!(&self.actions_sold);
+        dbg!(&self.turns);
+        dbg!(&self.actions_sold[Action::Acceleration(0).into_usize()]);
+        dbg!(amount);
+        let actions_sold = self.actions_sold[Action::Acceleration(0).into_usize()];
         let mut sum = 0;
         for i in 0..amount {
             sum += Self::compute_action_price(
@@ -315,7 +332,7 @@ impl Game {
     }
 
     fn get_banana_cost(&self) -> u128 {
-        let actions_sold = self.actions_sold[1];
+        let actions_sold = self.actions_sold[Action::Banana(0).into_usize()];
         Self::compute_action_price(
             BANANA_TARGET_PRICE as f64,
             BANANA_PER_TURN_DECREASE,
@@ -326,7 +343,7 @@ impl Game {
     }
 
     fn get_shell_cost(&self, amount: u32) -> u128 {
-        let actions_sold = self.actions_sold[2];
+        let actions_sold = self.actions_sold[Action::Shell(0).into_usize()];
         let mut sum = 0;
         for i in 0..amount {
             sum += Self::compute_action_price(
@@ -446,5 +463,13 @@ impl UserData for GameState {
             let cost = lock.get_shell_cost(amount);
             Ok(cost)
         });
+    }
+}
+
+mod tests {
+
+    #[test]
+    fn buy_actions() {
+        todo!();
     }
 }

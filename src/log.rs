@@ -2,8 +2,8 @@ use mlua::prelude::LuaError;
 use mlua::{IntoLua, Lua, Value};
 use serde::{Deserialize, Serialize};
 
+use crate::action::Action;
 use crate::car::Car;
-use crate::game::Action;
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct Log {
